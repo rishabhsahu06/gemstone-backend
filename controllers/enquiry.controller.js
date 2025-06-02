@@ -6,6 +6,7 @@ import { catchAsync } from "../utils/catchAsync.js"
 // @route   POST /api/enquiries
 // @access  Public
 export const createEnquiry = catchAsync(async (req, res, next) => {
+  console.log("Creating enquiry with data:", req.body)
   const enquiry = await Enquiry.create(req.body)
 
   res.status(201).json({

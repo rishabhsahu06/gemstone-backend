@@ -1,6 +1,46 @@
 import Product from "../models/product.model.js";
 import { AppError } from "../utils/appError.js";
 import { catchAsync } from "../utils/catchAsync.js";
+import NodeCache from "node-cache";
+
+// Initialize cache with TTL (Time To Live) settings
+const cache = new NodeCache({
+  stdTTL: 1, // Default cache time: 1 second means 1 if 600 seconds means (600)
+  checkperiod: 60, // Check for expired keys every 1 minute
+  useClones: false, // For better performance, set to true if you modify cached objects
+});
+
+// Cache key generators
+const generateCacheKey = {
+  allProducts: (query) => `products:all:${JSON.stringify(query)}`,
+  singleProduct: (id) => `product:${id}`,
+  productsByCategory: (category) => `products:category:${category}`,
+  productCount: (query) => `products:count:${JSON.stringify(query)}`,
+  primaryCategories: () => `products:primary-categories`,
+};
+
+// Cache invalidation helpers
+const invalidateProductCaches = (productId = null, primaryCategory = null) => {
+  // Clear all product list caches
+  const keys = cache.keys();
+  const keysToDelete = keys.filter(key => 
+    key.startsWith('products:all:') || 
+    key.startsWith('products:count:') ||
+    (primaryCategory && key === `products:category:${primaryCategory}`)
+  );
+  
+  if (keysToDelete.length > 0) {
+    cache.del(keysToDelete);
+  }
+  
+  // Clear specific product cache if ID provided
+  if (productId) {
+    cache.del(generateCacheKey.singleProduct(productId));
+  }
+
+  // Clear primary categories cache when products are modified
+  cache.del(generateCacheKey.primaryCategories());
+};
 
 // @desc    Get all products
 // @route   GET /api/products
@@ -17,6 +57,17 @@ export const getProducts = catchAsync(async (req, res, next) => {
     limit = 10,
     ...filters
   } = req.query;
+
+  // Generate cache keys
+  const queryForCache = { search, minPrice, maxPrice, isAvailable, sort, fields, page, limit, ...filters };
+  const cacheKey = generateCacheKey.allProducts(queryForCache);
+  const countCacheKey = generateCacheKey.productCount(filters);
+
+  // Try to get from cache first
+  const cachedResult = cache.get(cacheKey);
+  if (cachedResult) {
+    return res.status(200).json(cachedResult);
+  }
 
   const queryObj = { ...filters };
 
@@ -65,11 +116,18 @@ export const getProducts = catchAsync(async (req, res, next) => {
   const skip = (page - 1) * limit;
   mongoQuery = mongoQuery.skip(skip).limit(Number(limit));
 
-  // Execute
-  const products = await mongoQuery;
-  const total = await Product.countDocuments(JSON.parse(queryStr));
+  // Execute queries
+  const [products, total] = await Promise.all([
+    mongoQuery,
+    cache.get(countCacheKey) || Product.countDocuments(JSON.parse(queryStr))
+  ]);
 
-  res.status(200).json({
+  // Cache the count if not already cached
+  if (!cache.get(countCacheKey)) {
+    cache.set(countCacheKey, total, 300); // Cache count for 5 minutes
+  }
+
+  const response = {
     success: true,
     count: products.length,
     total,
@@ -79,23 +137,79 @@ export const getProducts = catchAsync(async (req, res, next) => {
       totalPages: Math.ceil(total / limit),
     },
     data: products,
-  });
+  };
+
+  // Cache the response for 10 minutes
+  cache.set(cacheKey, response, 600);
+
+  res.status(200).json(response);
 });
 
 // @desc    Get single product
 // @route   GET /api/products/:id
 // @access  Public
 export const getProduct = catchAsync(async (req, res, next) => {
+  const cacheKey = generateCacheKey.singleProduct(req.params.id);
+  
+  // Try to get from cache first
+  const cachedProduct = cache.get(cacheKey);
+  if (cachedProduct) {
+    return res.status(200).json({
+      success: true,
+      data: cachedProduct,
+    });
+  }
+
   const product = await Product.findById(req.params.id);
 
   if (!product) {
     return next(new AppError(`Product not found with ID: ${req.params.id}`, 404));
   }
 
+  // Cache the product for 15 minutes (longer for individual products)
+  cache.set(cacheKey, product, 900);
+
   res.status(200).json({
     success: true,
     data: product,
   });
+});
+
+// @desc    Get all primary categories
+// @route   GET /api/products/primary-categories
+// @access  Public
+export const getPrimaryCategories = catchAsync(async (req, res, next) => {
+  const cacheKey = generateCacheKey.primaryCategories();
+  
+  // Try to get from cache first
+  const cachedCategories = cache.get(cacheKey);
+  if (cachedCategories) {
+    return res.status(200).json(cachedCategories);
+  }
+
+  // Get distinct primary categories from database
+  const categories = await Product.distinct('primaryCategory');
+  console.log(`Found ${categories.length} primary categories`);
+  // Create response with id and name for each category
+  const formattedCategories = categories.map((category, index) => ({
+    id: index + 1,
+    name: category,
+    displayName: category
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' '), // Convert "yellow-sapphire" to "Yellow Sapphire"
+  }));
+
+  const response = {
+    success: true,
+    count: formattedCategories.length,
+    data: formattedCategories,
+  };
+
+  // Cache the response for 30 minutes (longer since categories don't change often)
+  cache.set(cacheKey, response, 1800);
+
+  res.status(200).json(response);
 });
 
 // @desc    Create new product
@@ -134,8 +248,10 @@ export const createProduct = catchAsync(async (req, res, next) => {
   const product = await Product.create({
     ...req.body,
     slug,
-    // id:Date.now(),
   });
+
+  // Invalidate relevant caches
+  invalidateProductCaches(null, primaryCategory);
 
   res.status(201).json({
     success: true,
@@ -143,18 +259,29 @@ export const createProduct = catchAsync(async (req, res, next) => {
   });
 });
 
-
 // @desc    Update product
 // @route   PUT /api/products/:id
 // @access  Private/Admin
 export const updateProduct = catchAsync(async (req, res, next) => {
+  // Get the old product to know its category for cache invalidation
+  const oldProduct = await Product.findById(req.params.id);
+  
+  if (!oldProduct) {
+    return next(new AppError(`Product not found with ID: ${req.params.id}`, 404));
+  }
+
   const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
   });
 
-  if (!product) {
-    return next(new AppError(`Product not found with ID: ${req.params.id}`, 404));
+  // Invalidate caches for both old and potentially new categories
+  const oldCategory = oldProduct.primaryCategory;
+  const newCategory = req.body.primaryCategory || oldCategory;
+  
+  invalidateProductCaches(req.params.id, oldCategory);
+  if (newCategory !== oldCategory) {
+    invalidateProductCaches(null, newCategory);
   }
 
   res.status(200).json({
@@ -175,6 +302,9 @@ export const deleteProduct = catchAsync(async (req, res, next) => {
 
   await product.deleteOne();
 
+  // Invalidate relevant caches
+  invalidateProductCaches(req.params.id, product.primaryCategory);
+
   res.status(200).json({
     success: true,
     message: "Product deleted successfully",
@@ -185,18 +315,82 @@ export const deleteProduct = catchAsync(async (req, res, next) => {
 // @desc    Get products by primary category
 // @route   GET api/products/get-primaryCategory/:primaryCategory
 // @access  Public
-export const getProductsByPrimaryCategory = async (req, res) => {
-  try {
-    const { primaryCategory } = req.params;
+export const getProductsByPrimaryCategory = catchAsync(async (req, res, next) => {
+  const { primaryCategory } = req.params;
+ 
+  const cacheKey = generateCacheKey.productsByCategory(primaryCategory);
 
-    const products = await Product.find({ primaryCategory });
-
-    if (products.length === 0) {
-      return res.status(404).json({ message: "No products found for this category" });
-    }
-
-    res.status(200).json(products);
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+  // Try to get from cache first
+  const cachedProducts = cache.get(cacheKey);
+  if (cachedProducts) {
+    return res.status(200).json(cachedProducts);
   }
-};
+
+  const products = await Product.find({ primaryCategory });
+
+  if (products.length === 0) {
+    return res.status(404).json({ 
+      success: false,
+      message: "No products found for this category" 
+    });
+  }
+
+  const response = {
+    success: true,
+    count: products.length,
+    data: products,
+  };
+
+  // Cache the products for 10 minutes
+  cache.set(cacheKey, response, 600);
+
+  res.status(200).json(response);
+});
+
+// @desc    Clear cache (utility endpoint for admin)
+// @route   DELETE /api/products/cache
+// @access  Private/Admin
+export const clearCache = catchAsync(async (req, res, next) => {
+  const { key } = req.query;
+  
+  if (key) {
+    // Clear specific cache key
+    const deleted = cache.del(key);
+    return res.status(200).json({
+      success: true,
+      message: `Cache key cleared: ${key}`,
+      deleted: deleted > 0,
+    });
+  } else {
+    // Clear all product-related caches
+    const keys = cache.keys();
+    const productKeys = keys.filter(k => k.startsWith('product'));
+    cache.del(productKeys);
+    
+    return res.status(200).json({
+      success: true,
+      message: "All product caches cleared",
+      clearedKeys: productKeys.length,
+    });
+  }
+});
+
+// @desc    Get cache statistics
+// @route   GET /api/products/cache/stats
+// @access  Private/Admin
+export const getCacheStats = catchAsync(async (req, res, next) => {
+  const stats = cache.getStats();
+  const keys = cache.keys();
+  
+  res.status(200).json({
+    success: true,
+    data: {
+      ...stats,
+      totalKeys: keys.length,
+      productKeys: keys.filter(k => k.startsWith('product')).length,
+    },
+  });
+});
+
+// Export cache instance for use in other modules if needed
+export { cache };

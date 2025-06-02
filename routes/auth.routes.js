@@ -11,6 +11,7 @@ router.post('/resend-otp', otpLimiter, resendOTP);
 // OTP-based login flow
 router.post('/login-otp', otpLimiter, sendLoginOTP);
 router.post('/verify-login-otp', verifyLoginOTP);
+router.post('/resend-login-otp', otpLimiter, resendOTP);
 // -------------------basically we are handling the otp based login flow for now but user also can register and update and me api is for work as before-------------------------
 router.post("/register", register)
 router.post("/login", login)
