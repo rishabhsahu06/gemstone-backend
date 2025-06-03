@@ -44,13 +44,40 @@ const swaggerOptions = {
   },
   apis: ["./routes/*.js", "./models/*.js"],
 }
-
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',  // React dev server
+      'http://localhost:3001',  // Alternative React port
+      'http://127.0.0.1:3000',  // Alternative localhost
+      'http://127.0.0.1:3001',  // Alternative localhost
+      // Add your production frontend URLs here when you deploy
+      // 'https://yourdomain.com',
+      // 'https://www.yourdomain.com'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // Allow credentials (cookies, authorization headers, etc.)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+};
 const swaggerDocs = swaggerJsDoc(swaggerOptions)
 
 // Middleware
 app.use(express.json({ limit: "10mb" }))
 app.use(express.urlencoded({ extended: true, limit: "10mb" }))
-app.use(cors())
+app.use(cors(corsOptions));
 app.use(helmet())
 app.use(morgan("dev"))
 app.use(timeoutMiddleware);
