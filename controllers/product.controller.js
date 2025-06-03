@@ -189,7 +189,7 @@ export const getPrimaryCategories = catchAsync(async (req, res, next) => {
 
   // Get distinct primary categories from database
   const categories = await Product.distinct('primaryCategory');
-  console.log(`Found ${categories.length} primary categories`);
+
   // Create response with id and name for each category
   const formattedCategories = categories.map((category, index) => ({
     id: index + 1,

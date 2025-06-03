@@ -60,6 +60,10 @@ const limiter = rateLimit({
   max: 100, // limit each IP to 100 requests per windowMs
   message: "Too many requests from this IP, please try again after 15 minutes",
 })
+//api for root route
+app.get("/", (req, res) => {
+  res.status(200).json({ status: "ok", message: "Welcome to Gemstone E-Commerce API" })
+})
 app.use("/api", limiter)
 
 // Routes
