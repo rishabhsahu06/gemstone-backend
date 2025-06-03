@@ -1,6 +1,6 @@
 import { catchAsync } from "../utils/catchAsync.js";
 import { AppError } from "../utils/appError.js";
-import   uploadToCloudinary  from "../utils/cloudinary.js";
+import uploadToCloudinary from "../utils/cloudinary.js";
 
 // @desc    Upload media (image or video) to Cloudinary
 // @route   POST /api/upload-media
@@ -19,8 +19,11 @@ export const uploadMedia = catchAsync(async (req, res, next) => {
     console.log("Starting Cloudinary upload...");
     const startTime = Date.now();
     
-    // Upload to Cloudinary
-    const result = await uploadToCloudinary(req.file.path);
+    // Upload to Cloudinary using buffer instead of file path
+    const result = await uploadToCloudinary(req.file.buffer, {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype
+    });
     
     const uploadTime = Date.now() - startTime;
     console.log(`Cloudinary upload completed in ${uploadTime}ms`);
@@ -60,11 +63,24 @@ export const uploadMultipleMedia = catchAsync(async (req, res, next) => {
   }
 
   try {
-    const uploadPromises = req.files.map(file => uploadToCloudinary(file.path));
+    console.log(`Starting upload of ${req.files.length} files...`);
+    const startTime = Date.now();
+    
+    // Upload all files to Cloudinary using buffers
+    const uploadPromises = req.files.map(file => 
+      uploadToCloudinary(file.buffer, {
+        originalname: file.originalname,
+        mimetype: file.mimetype
+      })
+    );
+    
     const results = await Promise.all(uploadPromises);
     
     // Filter out any failed uploads
     const successfulUploads = results.filter(result => result !== null);
+    
+    const uploadTime = Date.now() - startTime;
+    console.log(`Multiple upload completed in ${uploadTime}ms`);
     
     if (successfulUploads.length === 0) {
       return next(new AppError("Error uploading files to Cloudinary", 500));
@@ -74,6 +90,8 @@ export const uploadMultipleMedia = catchAsync(async (req, res, next) => {
     res.status(200).json({
       success: true,
       count: successfulUploads.length,
+      totalFiles: req.files.length,
+      uploadTime: uploadTime,
       data: successfulUploads.map(result => ({
         url: result.secure_url,
         public_id: result.public_id,
@@ -86,6 +104,7 @@ export const uploadMultipleMedia = catchAsync(async (req, res, next) => {
       }))
     });
   } catch (error) {
+    console.error("Multiple upload error:", error);
     return next(new AppError(`Error uploading files: ${error.message}`, 500));
   }
 });

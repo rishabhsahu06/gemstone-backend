@@ -1,63 +1,44 @@
-import { v2 as cloudinary } from "cloudinary";
-import fs from "fs/promises";
-import config from "../config/config.js";
+import { v2 as cloudinary } from 'cloudinary';
+import { Readable } from 'stream';
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: config.cloudinary.cloudName,
-  api_key: config.cloudinary.apiKey,
-  api_secret: config.cloudinary.apiSecret,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-/**
- * Uploads a file to Cloudinary and deletes it locally after upload.
- * @param {string} localFilePath - The path to the local file.
- * @returns {Promise<object|null>} Cloudinary upload response or null.
- */
-const uploadOnCloudinary = async (localFilePath) => {
-  if (!localFilePath) {
-    console.warn("No file path provided for upload.");
-    return null;
-  }
-
-  console.log(`Uploading file: ${localFilePath}`);
-
-  try {
-    const uploadPromise = cloudinary.uploader.upload(localFilePath, {
-      resource_type: "auto",
-      timeout: 60000, // 60 seconds timeout
-    });
-
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Cloudinary upload timed out")), 60000)
+// Function to upload buffer to Cloudinary
+const uploadToCloudinary = (buffer, fileInfo = {}) => {
+  return new Promise((resolve, reject) => {
+    // Determine resource type based on mimetype
+    const resourceType = fileInfo.mimetype?.startsWith('video/') ? 'video' : 'image';
+    
+    // Create upload stream
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: resourceType,
+        folder: 'gemstone-uploads', // Optional: organize uploads in folders
+        use_filename: true,
+        unique_filename: true,
+      },
+      (error, result) => {
+        if (error) {
+          console.error('Cloudinary upload error:', error);
+          reject(error);
+        } else {
+          console.log('Cloudinary upload successful:', result.public_id);
+          resolve(result);
+        }
+      }
     );
 
-    const response = await Promise.race([uploadPromise, timeoutPromise]);
-
-    console.log("✅ Cloudinary upload successful:", response.secure_url);
-
-    // Delete local file
-    try {
-      await fs.unlink(localFilePath);
-      console.log(" Local file deleted.");
-    } catch (fileErr) {
-      console.error(" Failed to delete local file:", fileErr.message);
-    }
-
-    return response;
-  } catch (err) {
-    console.error(" Cloudinary upload error:", err.message);
-
-    // Attempt to clean up the file if upload fails
-    try {
-      await fs.unlink(localFilePath);
-      console.log(" Local file deleted after error.");
-    } catch (fileErr) {
-      console.error(" Failed to delete local file after error:", fileErr.message);
-    }
-
-    throw err; // Re-throw for controller or calling function to handle
-  }
+    // Convert buffer to stream and pipe to Cloudinary
+    const bufferStream = new Readable();
+    bufferStream.push(buffer);
+    bufferStream.push(null);
+    bufferStream.pipe(uploadStream);
+  });
 };
 
-export default uploadOnCloudinary;
+export default uploadToCloudinary;
