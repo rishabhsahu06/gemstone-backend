@@ -55,6 +55,7 @@ const corsOptions = {
       'http://127.0.0.1:3000',  // Alternative localhost
       'http://127.0.0.1:3001',  // Alternative localhost
       // Add your production frontend URLs here when you deploy
+      'https://sunitagemstones.netlify.app',
       'https://sunitagemstones.netlify.app/',
       // 'https://www.yourdomain.com'
     ];
