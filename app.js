@@ -54,9 +54,7 @@ const corsOptions = {
       'http://localhost:3001',  // Alternative React port
       'http://127.0.0.1:3000',  // Alternative localhost
       'http://127.0.0.1:3001',  // Alternative localhost
-      // Add your production frontend URLs here when you deploy
-      'https://sunitagemstones.netlify.app',
-      'https://sunitagemstones.netlify.app/',
+      'https://sunitagemstones.netlify.app', // ← Removed trailing slash
       // 'https://www.yourdomain.com'
     ];
     
@@ -66,12 +64,12 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true, // Allow credentials (cookies, authorization headers, etc.)
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
-  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
+  optionsSuccessStatus: 200
 };
 const swaggerDocs = swaggerJsDoc(swaggerOptions)
 
