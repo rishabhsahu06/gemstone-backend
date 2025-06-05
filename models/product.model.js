@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const productSchema = new mongoose.Schema(
   {
     name: {
-      type: String,
+      type: String, 
       required: [true, "Please provide a product name"],
       trim: true,
       maxlength: [100, "Name cannot be more than 100 characters"],
@@ -20,13 +20,21 @@ const productSchema = new mongoose.Schema(
     primaryCategory: {
       type: String,
       required: [true, "Please provide a primary category"],
-enum: ["yellow-sapphire", "blue-sapphire", "emerald", "ruby", "opal", "red-coral", "pearl", "hessonite", "other"],
+enum: ["yellow-sapphire", "blue-sapphire", "pink-sapphire", "emerald", "ruby", "opal", "red-coral", "pearl", "hessonite", "other"],
     },
     secondaryCategory: {
       type: String,
       enum: ["gemstone-pendants", "gemstone-bracelets", "gemstone-rings", "loose-gemstone", "none"],
       default: "none",
     },
+    productBenefits: [
+      {
+        type: String,
+        enum: ["Financial Growth", "Relationship Growth", "Promotes Good Health", "Spiritual Growth", "Emotional Stability", "Success in Education", "Career Success", "Other"],
+        required: [true, "Please provide a product benefit"],
+        default: "Financial Growth",
+      },
+    ],
     origin: {
       type: String,
       default: "",
