@@ -46,67 +46,42 @@ const swaggerOptions = {
 }
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, or curl requests)
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
     const allowedOrigins = [
-      // Development origins
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:3001',
-      
-      // Production origins
-      'https://sunitagemstones.netlify.app',
-      'https://sunitagemstones.netlify.app/',
-      
-      // Add your backend URL for internal API calls
-      'https://gemstone-backend.vercel.app',
-      
-      // If you have a custom domain, add it here
+      'http://localhost:3000',  // React dev server
+      'http://localhost:3001',  // Alternative React port
+      'http://127.0.0.1:3000',  // Alternative localhost
+      'http://127.0.0.1:3001',  // Alternative localhost
+      'http://localhost:8000',  // API server
+      'http://127.0.0.1:8000',  // API server
+      'https://sunitagemstones.netlify.app',  // API server
+      'https://sunitagemstones.com',  // Production server
+      // Add your production frontend URLs here when you deploy
       // 'https://yourdomain.com',
+      // 'https://www.yourdomain.com'
     ];
-    
-    // For development, you might want to be more permissive
-    if (process.env.NODE_ENV === 'development') {
-      return callback(null, true);
-    }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      console.log('CORS blocked origin:', origin); // For debugging
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
+  credentials: true, // Allow credentials (cookies, authorization headers, etc.)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With', 
-    'Accept', 
-    'Origin',
-    'Cache-Control',
-    'X-File-Name'
-  ],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
-
-// Apply CORS before other middleware
-app.use(cors(corsOptions));
 const swaggerDocs = swaggerJsDoc(swaggerOptions)
 
 // Middleware
 app.use(express.json({ limit: "10mb" }))
 app.use(express.urlencoded({ extended: true, limit: "10mb" }))
-// app.use(cors(corsOptions));
-app.use(cors({
-  origin: '*',
-  credentials: true
-}));
+app.use(cors(corsOptions));
 app.use(helmet())
 app.use(morgan("dev"))
 app.use(timeoutMiddleware);
