@@ -46,31 +46,57 @@ const swaggerOptions = {
 }
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps, Postman, or curl requests)
     if (!origin) return callback(null, true);
     
     const allowedOrigins = [
-      'http://localhost:3000',  // React dev server
-      'http://localhost:3001',  // Alternative React port
-      'http://127.0.0.1:3000',  // Alternative localhost
-      'http://127.0.0.1:3001',  // Alternative localhost
-      'https://sunitagemstones.netlify.app', // ← Removed trailing slash
-      // 'https://www.yourdomain.com'
+      // Development origins
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3001',
+      
+      // Production origins
+      'https://sunitagemstones.netlify.app',
+      'https://sunitagemstones.netlify.app/',
+      
+      // Add your backend URL for internal API calls
+      'https://gemstone-backend.vercel.app',
+      
+      // If you have a custom domain, add it here
+      // 'https://yourdomain.com',
     ];
+    
+    // For development, you might want to be more permissive
+    if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin); // For debugging
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin',
+    'Cache-Control',
+    'X-File-Name'
+  ],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
   preflightContinue: false,
   optionsSuccessStatus: 200
 };
+
+// Apply CORS before other middleware
+app.use(cors(corsOptions));
 const swaggerDocs = swaggerJsDoc(swaggerOptions)
 
 // Middleware
