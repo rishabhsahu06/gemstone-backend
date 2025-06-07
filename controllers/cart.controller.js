@@ -72,11 +72,23 @@ export const addItemToCart = catchAsync(async (req, res, next) => {
   const { productId, quantity = 1 } = req.body;
 
   const product = await Product.findById(productId);
+  // Check if product exists
   if (!product) return next(new AppError("Product not found", 404));
 
   if (!product.isAvailable || product.stock < quantity) {
     return next(new AppError("Product is not available in the requested quantity", 400));
   }
+  //checking if product is already exist in to cart 
+  const existingCart = await Cart.findOne({ user: req.user.id });
+  if (existingCart && existingCart.items.some(item => item.product.toString() === productId)) {
+    return next(new AppError("Product already exists in the cart", 400));
+  } 
+  if (quantity < 1) {
+    return next(new AppError("Quantity must be at least 1", 400));  
+  }
+  
+ 
+ 
 
   let cart = await Cart.findOne({ user: req.user.id });
   if (!cart) {
