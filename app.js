@@ -26,7 +26,7 @@ dotenv.config()
 
 // Initialize express app
 const app = express()
-
+app.set('trust proxy', true);
 // Swagger configuration
 const swaggerOptions = {
   definition: {
