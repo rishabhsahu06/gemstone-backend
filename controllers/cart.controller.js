@@ -227,6 +227,7 @@ export const removeCartItem = catchAsync(async (req, res, next) => {
   res.status(200).json({
     success: true,
     data: cart,
+    message: "Item removed from cart",
   })
 })
 
