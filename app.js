@@ -26,7 +26,7 @@ dotenv.config()
 
 // Initialize express app
 const app = express()
-app.set('trust proxy', true);
+// app.set('trust proxy', true);
 // Swagger configuration
 const swaggerOptions = {
   definition: {
@@ -94,6 +94,9 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
   message: "Too many requests from this IP, please try again after 15 minutes",
+  validate: {
+    xForwardedForHeader: false,
+  },
 })
 //api for root route
 app.get("/", (req, res) => {
