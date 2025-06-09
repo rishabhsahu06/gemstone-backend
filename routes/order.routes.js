@@ -6,22 +6,28 @@ import {
   getUserOrders,
   getOrderById,
   updateOrderStatus,
+  cancelOrder,
 } from "../controllers/order.controller.js"
-import { catchAsync } from "../utils/catchAsync.js"
 import { protect, authorize } from "../middleware/auth.middleware.js"
 
 const router = express.Router()
 
-// Razorpay webhook - needs raw body
+// Razorpay webhook - needs raw body (must be before other middleware)
 router.post("/webhook", express.raw({ type: "application/json" }), razorpayWebhook)
 
 // Protected routes
 router.use(protect)
 
+// Order creation and payment
 router.post("/create-order", createRazorpayOrder)
 router.post("/verify-payment", verifyRazorpayPayment)
+
+// Order retrieval
 router.get("/", getUserOrders)
 router.get("/:id", getOrderById)
+
+// Order management
+router.put("/:id/cancel", cancelOrder)
 
 // Admin only routes
 router.put("/:id", authorize("admin"), updateOrderStatus)

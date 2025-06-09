@@ -38,7 +38,8 @@ export const createRazorpayOrder = catchAsync(async (req, res, next) => {
     path: "items.product",
     select: "name images discountedPrice originalPrice isAvailable stock",
   })
-console.log(cart, "Cart details for user")
+  console.log(cart, "Cart details for user")
+  
   if (!cart || cart.items.length === 0) {
     return next(new AppError("Your cart is empty", 400))
   }
@@ -57,7 +58,7 @@ console.log(cart, "Cart details for user")
   // Create Razorpay order
   const razorpayOrder = await razorpay.orders.create({
     amount: amount,
-    currency: "INR", // Change to your preferred currency
+    currency: "INR",
     receipt: `order_${Date.now()}`,
     notes: {
       userId: req.user.id.toString(),
@@ -65,7 +66,8 @@ console.log(cart, "Cart details for user")
       shippingAddress: JSON.stringify(shippingAddress),
     },
   })
- res.status(200).json({
+  
+  res.status(200).json({
     success: true,
     orderId: razorpayOrder.id,
     amount: razorpayOrder.amount,
@@ -132,11 +134,194 @@ export const razorpayWebhook = catchAsync(async (req, res, next) => {
     // Get order details
     const razorpayOrder = await razorpay.orders.fetch(orderId)
     
-    // You can add additional processing here if needed
     console.log("Payment captured:", payment.id)
   }
 
   res.status(200).json({ received: true })
+})
+
+// @desc    Get user orders
+// @route   GET /api/orders
+// @access  Private
+export const getUserOrders = catchAsync(async (req, res, next) => {
+  const page = parseInt(req.query.page, 10) || 1
+  const limit = parseInt(req.query.limit, 10) || 10
+  const skip = (page - 1) * limit
+
+  // Build query
+  const query = { user: req.user.id }
+  
+  // Add status filter if provided
+  if (req.query.status) {
+    query.status = req.query.status
+  }
+
+  const orders = await Order.find(query)
+    .sort("-createdAt")
+    .skip(skip)
+    .limit(limit)
+    .populate({
+      path: "items.product",
+      select: "name images"
+    })
+
+  const total = await Order.countDocuments(query)
+
+  res.status(200).json({
+    success: true,
+    count: orders.length,
+    total,
+    page,
+    pages: Math.ceil(total / limit),
+    data: orders,
+  })
+})
+
+// @desc    Get order by ID
+// @route   GET /api/orders/:id
+// @access  Private
+export const getOrderById = catchAsync(async (req, res, next) => {
+  const orderId = req.params.id
+
+  // Validate ObjectId format
+  if (!orderId.match(/^[0-9a-fA-F]{24}$/)) {
+    return next(new AppError("Invalid order ID format", 400))
+  }
+
+  const order = await Order.findById(orderId)
+    .populate({
+      path: "user",
+      select: "name email phone"
+    })
+    .populate({
+      path: "items.product",
+      select: "name images description category"
+    })
+
+  if (!order) {
+    return next(new AppError("Order not found", 404))
+  }
+
+  // Check if order belongs to user or user is admin
+  if (order.user._id.toString() !== req.user.id && req.user.role !== "admin") {
+    return next(new AppError("Not authorized to access this order", 403))
+  }
+
+  // Calculate order summary
+  const orderSummary = {
+    subtotal: order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+    totalItems: order.items.reduce((sum, item) => sum + item.quantity, 0),
+    totalAmount: order.totalAmount
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      ...order.toObject(),
+      summary: orderSummary
+    },
+  })
+})
+
+// @desc    Update order status
+// @route   PUT /api/orders/:id
+// @access  Private/Admin
+export const updateOrderStatus = catchAsync(async (req, res, next) => {
+  const { status, trackingNumber } = req.body
+  const orderId = req.params.id
+
+  // Validate status
+  const validStatuses = ["Processing", "Shipped", "Delivered", "Cancelled"]
+  if (!validStatuses.includes(status)) {
+    return next(new AppError("Invalid order status", 400))
+  }
+
+  const order = await Order.findById(orderId)
+    .populate({
+      path: "user",
+      select: "name phone email"
+    })
+
+  if (!order) {
+    return next(new AppError("Order not found", 404))
+  }
+
+  // Don't allow status changes for delivered or cancelled orders
+  if (order.status === "Delivered" || order.status === "Cancelled") {
+    return next(new AppError("Cannot update status of delivered or cancelled orders", 400))
+  }
+
+  const oldStatus = order.status
+  order.status = status
+
+  // Set delivery date if status is delivered
+  if (status === "Delivered" && oldStatus !== "Delivered") {
+    order.deliveredAt = new Date()
+  }
+
+  // Add tracking number if provided
+  if (trackingNumber) {
+    order.trackingNumber = trackingNumber
+  }
+
+  await order.save()
+
+  // Send WhatsApp notification for status update
+  await sendOrderStatusUpdate(order, oldStatus)
+
+  res.status(200).json({
+    success: true,
+    message: `Order status updated from ${oldStatus} to ${status}`,
+    data: order,
+  })
+})
+
+// @desc    Cancel order
+// @route   PUT /api/orders/:id/cancel
+// @access  Private
+export const cancelOrder = catchAsync(async (req, res, next) => {
+  const orderId = req.params.id
+  const { reason } = req.body
+
+  const order = await Order.findById(orderId)
+
+  if (!order) {
+    return next(new AppError("Order not found", 404))
+  }
+
+  // Check if order belongs to user
+  if (order.user.toString() !== req.user.id) {
+    return next(new AppError("Not authorized to cancel this order", 403))
+  }
+
+  // Only allow cancellation if order is not shipped or delivered
+  if (order.status === "Shipped" || order.status === "Delivered") {
+    return next(new AppError("Cannot cancel shipped or delivered orders", 400))
+  }
+
+  if (order.status === "Cancelled") {
+    return next(new AppError("Order is already cancelled", 400))
+  }
+
+  // Update order status
+  order.status = "Cancelled"
+  order.cancelledAt = new Date()
+  order.cancellationReason = reason || "Cancelled by customer"
+
+  // Restore product stock
+  for (const item of order.items) {
+    await Product.findByIdAndUpdate(item.product, {
+      $inc: { stock: item.quantity }
+    })
+  }
+
+  await order.save()
+
+  res.status(200).json({
+    success: true,
+    message: "Order cancelled successfully",
+    data: order,
+  })
 })
 
 // Helper function to create order after successful payment
@@ -200,66 +385,6 @@ const createOrder = async (razorpayOrder, payment, userId) => {
   return order
 }
 
-// @desc    Get user orders
-// @route   GET /api/orders
-// @access  Private
-export const getUserOrders = catchAsync(async (req, res, next) => {
-  const orders = await Order.find({ user: req.user.id }).sort("-createdAt")
-
-  res.status(200).json({
-    success: true,
-    count: orders.length,
-    data: orders,
-  })
-})
-
-// @desc    Get order by ID
-// @route   GET /api/orders/:id
-// @access  Private
-export const getOrderById = catchAsync(async (req, res, next) => {
-  const order = await Order.findById(req.params.id)
-
-  if (!order) {
-    return next(new AppError("Order not found", 404))
-  }
-
-  // Check if order belongs to user or user is admin
-  if (order.user.toString() !== req.user.id && req.user.role !== "admin") {
-    return next(new AppError("Not authorized to access this order", 401))
-  }
-
-  res.status(200).json({
-    success: true,
-    data: order,
-  })
-})
-
-// @desc    Update order status
-// @route   PUT /api/orders/:id
-// @access  Private/Admin
-export const updateOrderStatus = catchAsync(async (req, res, next) => {
-  const { status } = req.body
-
-  const order = await Order.findById(req.params.id)
-
-  if (!order) {
-    return next(new AppError("Order not found", 404))
-  }
-
-  order.status = status
-
-  if (status === "Delivered") {
-    order.deliveredAt = Date.now()
-  }
-
-  await order.save()
-
-  res.status(200).json({
-    success: true,
-    data: order,
-  })
-})
-
 // Helper function to send WhatsApp order confirmation
 const sendOrderConfirmation = async (order, user) => {
   try {
@@ -301,5 +426,29 @@ const sendOrderConfirmation = async (order, user) => {
     await order.save()
   } catch (error) {
     console.error("WhatsApp notification error:", error)
+  }
+}
+
+// Helper function to send WhatsApp status update
+const sendOrderStatusUpdate = async (order, oldStatus) => {
+  try {
+    let message = `Order Status Update\n\n`
+    message += `Order ID: ${order._id}\n`
+    message += `Status changed from: ${oldStatus} → ${order.status}\n`
+
+    if (order.trackingNumber) {
+      message += `Tracking Number: ${order.trackingNumber}\n`
+    }
+
+    if (order.status === "Shipped") {
+      message += `\nYour order has been shipped and is on its way!`
+    } else if (order.status === "Delivered") {
+      message += `\nYour order has been delivered. Thank you for shopping with us!`
+    }
+
+    // Send message to customer
+    await sendWhatsAppMessage(order.user.phone, message)
+  } catch (error) {
+    console.error("WhatsApp status update error:", error)
   }
 }
