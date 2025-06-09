@@ -97,7 +97,7 @@ const limiter = rateLimit({
 })
 //api for root route
 app.get("/", (req, res) => {
-  res.status(200).json({ status: "ok", message: "Welcome to Gemstone E-Commerce API" })
+  res.status(200).json({ status: "ok", message: "Welcome to Gemstone E-Commerce API's" })
 })
 app.use("/api", limiter)
 
