@@ -16,7 +16,7 @@ const tempUserStore = new Map();
 
 // Rate limiting for OTP requests
 export const otpLimiter = rateLimit({
-  windowMs: 15 * 60 * 1, // 15 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 3, // Limit each IP to 3 OTP requests per windowMs
   message: {
     success: false,
