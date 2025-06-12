@@ -7,7 +7,7 @@ import User from "../models/user.model.js"
 import { AppError } from "../utils/appError.js"
 import { catchAsync } from "../utils/catchAsync.js"
 import config from "../config/config.js"
-import { sendWhatsAppMessage } from "../services/watsapp.service.js"
+import { sendWhatsAppMessage, validateWhatsAppConfig } from "../services/watsapp.service.js"
 
 const razorpay = new Razorpay({
   key_id: config.razorpay.keyId,
@@ -82,6 +82,8 @@ export const createRazorpayOrder = catchAsync(async (req, res, next) => {
 export const verifyRazorpayPayment = catchAsync(async (req, res, next) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body
 
+  console.log('Verifying payment:', { razorpay_order_id, razorpay_payment_id })
+
   // Verify payment signature
   const body = razorpay_order_id + "|" + razorpay_payment_id
   const expectedSignature = crypto
@@ -90,21 +92,29 @@ export const verifyRazorpayPayment = catchAsync(async (req, res, next) => {
     .digest("hex")
 
   if (expectedSignature !== razorpay_signature) {
+    console.error('Payment signature verification failed')
     return next(new AppError("Payment verification failed", 400))
   }
 
-  // Get order details from Razorpay
-  const razorpayOrder = await razorpay.orders.fetch(razorpay_order_id)
-  const payment = await razorpay.payments.fetch(razorpay_payment_id)
+  try {
+    // Get order details from Razorpay
+    const razorpayOrder = await razorpay.orders.fetch(razorpay_order_id)
+    const payment = await razorpay.payments.fetch(razorpay_payment_id)
 
-  // Create order in database
-  const order = await createOrder(razorpayOrder, payment, req.user.id)
+    console.log('Payment verified successfully:', payment.id)
 
-  res.status(200).json({
-    success: true,
-    message: "Payment verified successfully",
-    orderId: order._id,
-  })
+    // Create order in database
+    const order = await createOrder(razorpayOrder, payment, req.user.id)
+
+    res.status(200).json({
+      success: true,
+      message: "Payment verified successfully",
+      orderId: order._id,
+    })
+  } catch (error) {
+    console.error('Error in payment verification:', error)
+    return next(new AppError("Failed to process order after payment verification", 500))
+  }
 })
 
 // @desc    Handle Razorpay webhook
@@ -386,46 +396,110 @@ const createOrder = async (razorpayOrder, payment, userId) => {
 }
 
 // Helper function to send WhatsApp order confirmation
+// Helper function to send WhatsApp order confirmation
+// Helper function to send WhatsApp order confirmation
 const sendOrderConfirmation = async (order, user) => {
   try {
-    if (order.whatsappNotificationSent) {
+    // Validate WhatsApp configuration before attempting to send
+    if (!validateWhatsAppConfig()) {
+      console.warn('WhatsApp service not properly configured, skipping notifications')
       return
     }
 
+    // Check if notification already sent to avoid duplicates
+    if (order.whatsappNotificationSent) {
+      console.log('WhatsApp notification already sent for order:', order._id)
+      return
+    }
+
+    // Validate phone numbers
+    if (!user.phone) {
+      console.warn('User phone number not available for WhatsApp notification')
+      return
+    }
+
+    // Format phone numbers (ensure they have country code)
+    const customerPhone = formatPhoneNumber(user.phone)
+    const adminPhone = config.adminPhone ? formatPhoneNumber(config.adminPhone) : null
+
     // Prepare message for customer
-    let customerMessage = `Thank you for your order, ${user.name}!\n\n`
-    customerMessage += `Order ID: ${order._id}\n`
-    customerMessage += `Total Amount: ₹${order.totalAmount}\n\n`
-    customerMessage += `Items:\n`
+    let customerMessage = `🎉 Thank you for your order, ${user.name}!\n\n`
+    customerMessage += `📦 Order ID: ${order._id}\n`
+    customerMessage += `💰 Total Amount: ₹${order.totalAmount}\n\n`
+    customerMessage += `📋 Items Ordered:\n`
 
     for (const item of order.items) {
-      customerMessage += `- ${item.name} x${item.quantity}: ₹${item.price * item.quantity}\n`
+      customerMessage += `• ${item.name} x${item.quantity}: ₹${item.price * item.quantity}\n`
     }
 
-    customerMessage += `\nWe'll process your order soon. Thank you for shopping with us!`
+    customerMessage += `\n✅ Payment Status: Confirmed\n`
+    customerMessage += `🚚 We'll process your order soon and keep you updated!\n\n`
+    customerMessage += `Thank you for shopping with us! 🛍️`
 
-    // Send message to customer
-    await sendWhatsAppMessage(user.phone, customerMessage)
-
-    // Prepare message for admin
-    let adminMessage = `New Order Received!\n\n`
-    adminMessage += `Order ID: ${order._id}\n`
-    adminMessage += `Customer: ${user.name} (${user.email})\n`
-    adminMessage += `Total Amount: ₹${order.totalAmount}\n\n`
-    adminMessage += `Items:\n`
-
-    for (const item of order.items) {
-      adminMessage += `- ${item.name} x${item.quantity}: ₹${item.price * item.quantity}\n`
+    // Send message to customer with error handling
+    try {
+      console.log('Sending WhatsApp message to customer:', customerPhone)
+      await sendWhatsAppMessage(customerPhone, customerMessage)
+      console.log('Customer notification sent successfully')
+    } catch (customerError) {
+      console.error('Failed to send customer WhatsApp notification:', customerError.message)
+      // Continue with admin notification even if customer notification fails
     }
 
-    // Send message to admin
-    await sendWhatsAppMessage(config.adminPhone, adminMessage)
+    // Prepare and send admin message
+    if (adminPhone) {
+      try {
+        let adminMessage = `🔔 New Order Received!\n\n`
+        adminMessage += `📦 Order ID: ${order._id}\n`
+        adminMessage += `👤 Customer: ${user.name}\n`
+        adminMessage += `📧 Email: ${user.email}\n`
+        adminMessage += `📱 Phone: ${user.phone}\n`
+        adminMessage += `💰 Total Amount: ₹${order.totalAmount}\n\n`
+        adminMessage += `📋 Items:\n`
 
-    // Update order
+        for (const item of order.items) {
+          adminMessage += `• ${item.name} x${item.quantity}: ₹${item.price * item.quantity}\n`
+        }
+
+        adminMessage += `\n📍 Shipping Address:\n`
+        const addr = order.shippingAddress
+        adminMessage += `${addr.street}, ${addr.city}, ${addr.state} ${addr.postalCode}, ${addr.country}`
+
+        console.log('Sending WhatsApp message to admin:', adminPhone)
+        await sendWhatsAppMessage(adminPhone, adminMessage)
+        console.log('Admin notification sent successfully')
+      } catch (adminError) {
+        console.error('Failed to send admin WhatsApp notification:', adminError.message)
+      }
+    } else {
+      console.warn('Admin phone number not configured, skipping admin notification')
+    }
+
+    // Mark notification as sent (even if some failed)
     order.whatsappNotificationSent = true
     await order.save()
+    
+    console.log('WhatsApp notification process completed for order:', order._id)
   } catch (error) {
-    console.error("WhatsApp notification error:", error)
+    console.error("WhatsApp notification error for order", order._id, ":", error.message)
+    // Don't throw error to avoid breaking the order flow
+  }
+}
+
+// Helper function to format phone numbers
+const formatPhoneNumber = (phone) => {
+  // Remove any non-digit characters
+  const cleanPhone = phone.replace(/\D/g, '')
+  
+  // If phone doesn't start with country code, assume India (+91)
+  if (cleanPhone.length === 10) {
+    return `+91${cleanPhone}`
+  } else if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
+    return `+${cleanPhone}`
+  } else if (phone.startsWith('+')) {
+    return phone
+  } else {
+    return `+${cleanPhone}`
   }
 }
 
