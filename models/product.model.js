@@ -20,11 +20,41 @@ const productSchema = new mongoose.Schema(
     primaryCategory: {
       type: String,
       required: [true, "Please provide a primary category"],
-enum: ["yellow-sapphire", "blue-sapphire", "pink-sapphire", "emerald", "ruby", "opal", "red-coral", "pearl", "hessonite", "other"],
+enum: 
+[
+  "pink-sapphire",
+  "blue-sapphire",
+  "yellow-sapphire",
+  "red-coral",
+  "white-sapphire",
+  "ruby",
+  "emerald",
+  "diamond",
+  "opal",
+  "amethyst",
+  "topaz",
+  "garnet",
+  "tanzanite",
+  "aquamarine",
+  "peridot",
+  "tourmaline",
+  "citrine",
+  "moonstone",
+  "alexandrite",
+  "lapis-lazuli",
+  "turquoise",
+  "spinel",
+  "iolite",
+  "zircon",
+  "chrysoberyl",
+  "kyanite",
+  "sodalite",
+  "other-gemstones",
+]
     },
     secondaryCategory: {
       type: String,
-      enum: ["gemstone-pendants", "gemstone-bracelets", "gemstone-rings", "loose-gemstone", "none"],
+      enum: ["gemstone-pendants", "gemstone-bracelets", "gemstone-rings", "loose-gemstones", "none"],
       default: "none",
     },
     productBenefits: [
@@ -71,7 +101,7 @@ enum: ["yellow-sapphire", "blue-sapphire", "pink-sapphire", "emerald", "ruby", "
   "Transmutation of Negative Energy",
   "Other"
 ],
-        required: [true, "Please provide a product benefit"],
+        required: [false, "Please provide a product benefit"],
         default: "Financial Growth",
       },
     ],
@@ -81,7 +111,7 @@ enum: ["yellow-sapphire", "blue-sapphire", "pink-sapphire", "emerald", "ruby", "
     },
     certification: {
       type: String,
-      enum: ["Free Lab Certificate", "Govt Lab Certificate", "None"],
+      enum: ["Free Lab Certificate", "Govt Lab Certificate","IGI", "GIA", "None"],
       default: "Free Lab Certificate",
     },
     poojaEnergization: {
