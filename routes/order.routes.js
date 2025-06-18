@@ -7,6 +7,8 @@ import {
   getOrderById,
   updateOrderStatus,
   cancelOrder,
+  getAllOrdersAdmin,
+  getOrderStats,
 } from "../controllers/order.controller.js"
 import { protect, authorize } from "../middleware/auth.middleware.js"
 
@@ -31,5 +33,6 @@ router.put("/:id/cancel", cancelOrder)
 
 // Admin only routes
 router.put("/:id", authorize("admin"), updateOrderStatus)
-
+router.get("/admin/all", authorize("admin"), getAllOrdersAdmin)
+router.get("/admin/stats", authorize("admin"), getOrderStats)//analytical data
 export default router
