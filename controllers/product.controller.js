@@ -187,17 +187,32 @@ export const getPrimaryCategories = catchAsync(async (req, res, next) => {
     return res.status(200).json(cachedCategories);
   }
 
-  // Get distinct primary categories from database
-  const categories = await Product.distinct('primaryCategory');
+  // Get products with distinct primary categories and their images
+  const products = await Product.aggregate([
+    {
+      $group: {
+        _id: '$primaryCategory',
+        primaryCategoryImage: { $first: '$primaryCategoryImage' }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        primaryCategory: '$_id',
+        primaryCategoryImage: 1
+      }
+    }
+  ]);
 
-  // Create response with id and name for each category
-  const formattedCategories = categories.map((category, index) => ({
+  // Create response with id, name, and image for each category
+  const formattedCategories = products.map((product, index) => ({
     id: index + 1,
-    name: category,
-    displayName: category
+    name: product.primaryCategory,
+    displayName: product.primaryCategory
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' '), // Convert "yellow-sapphire" to "Yellow Sapphire"
+    primaryCategoryImage: product.primaryCategoryImage
   }));
 
   const response = {
