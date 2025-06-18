@@ -51,10 +51,12 @@ enum:
   "sodalite",
   "other-gemstones",
 ],
-primaryCategoryImage: {
-  type: String,
-},
+
     },
+    primaryCategoryImage: {
+  type: String,
+   required: [false, "Please provide a primary category image"],
+},
     secondaryCategory: {
       type: String,
       enum: ["gemstone-pendants", "gemstone-bracelets", "gemstone-rings", "loose-gemstones", "none"],
