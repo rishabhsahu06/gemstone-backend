@@ -50,7 +50,10 @@ enum:
   "kyanite",
   "sodalite",
   "other-gemstones",
-]
+],
+primaryCategoryImage: {
+  type: String,
+},
     },
     secondaryCategory: {
       type: String,
@@ -190,7 +193,7 @@ enum:
       length: Number,
       width: Number,
       height: Number,
-    },
+    }, 
     refractiveIndex: {
       min: Number,
       max: Number,
