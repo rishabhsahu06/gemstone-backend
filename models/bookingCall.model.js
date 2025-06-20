@@ -24,7 +24,7 @@ const bookingCallSchema = new mongoose.Schema({
   gender: {
     type: String,
     required: [true, "Gender is required"],
-    enum: ["male", "female", "other"],
+    enum: ["male", "female","Male", "Female", "other","Other"],
     trim: true
   },
   dateOfBirth: {
