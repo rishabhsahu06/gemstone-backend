@@ -8,6 +8,7 @@ import { AppError } from "../utils/appError.js"
 import { catchAsync } from "../utils/catchAsync.js"
 import config from "../config/config.js"
 import { sendWhatsAppMessage, validateWhatsAppConfig } from "../services/watsapp.service.js"
+import BookingCall from "../models/bookingCall.model.js"
 
 const razorpay = new Razorpay({
   key_id: config.razorpay.keyId,
@@ -412,6 +413,8 @@ export const getOrderStats = catchAsync(async (req, res, next) => {
   const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
   
   const thisYear = new Date(today.getFullYear(), 0, 1)
+  const lastYear = new Date(today.getFullYear() - 1, 0, 1)
+  const lastYearEnd = new Date(today.getFullYear() - 1, 11, 31, 23, 59, 59, 999)
 
   // Parallel queries for better performance
   const [
@@ -420,12 +423,15 @@ export const getOrderStats = catchAsync(async (req, res, next) => {
     weeklyOrders,
     monthlyOrders,
     yearlyOrders,
+    lastYearOrders,
     totalRevenue,
     todayRevenue,
     weeklyRevenue,
     monthlyRevenue,
     yearlyRevenue,
+    lastYearRevenue,
     totalProducts,
+    totalBookingCalls,
     statusCounts,
     recentOrders,
     topCustomers,
@@ -437,6 +443,9 @@ export const getOrderStats = catchAsync(async (req, res, next) => {
     Order.countDocuments({ createdAt: { $gte: thisWeek } }),
     Order.countDocuments({ createdAt: { $gte: thisMonth } }),
     Order.countDocuments({ createdAt: { $gte: thisYear } }),
+    Order.countDocuments({ 
+      createdAt: { $gte: lastYear, $lte: lastYearEnd } 
+    }),
     
     // Revenue
     Order.aggregate([
@@ -459,9 +468,21 @@ export const getOrderStats = catchAsync(async (req, res, next) => {
       { $match: { createdAt: { $gte: thisYear }, status: { $ne: "Cancelled" } } },
       { $group: { _id: null, total: { $sum: "$totalAmount" } } }
     ]),
+    Order.aggregate([
+      { 
+        $match: { 
+          createdAt: { $gte: lastYear, $lte: lastYearEnd }, 
+          status: { $ne: "Cancelled" } 
+        } 
+      },
+      { $group: { _id: null, total: { $sum: "$totalAmount" } } }
+    ]),
     
     // Total products count
     Product.countDocuments(),
+    
+    // Total booking calls count
+    BookingCall.countDocuments(),
     
     // Status breakdown
     Order.aggregate([
@@ -532,12 +553,25 @@ export const getOrderStats = catchAsync(async (req, res, next) => {
     ])
   ])
 
+  // Calculate growth rates
+  const calculateGrowthRate = (current, previous) => {
+    if (previous === 0) return current > 0 ? 100 : 0
+    return ((current - previous) / previous) * 100
+  }
+
+  const currentYearRevenue = yearlyRevenue[0]?.total || 0
+  const previousYearRevenue = lastYearRevenue[0]?.total || 0
+  
+  const revenueGrowthRate = calculateGrowthRate(currentYearRevenue, previousYearRevenue)
+  const ordersGrowthRate = calculateGrowthRate(yearlyOrders, lastYearOrders)
+
   res.status(200).json({
     success: true,
     data: {
       overview: {
         totalOrders,
         totalProducts,
+        totalBookingCalls,
         todayOrders,
         weeklyOrders,
         monthlyOrders,
@@ -546,8 +580,16 @@ export const getOrderStats = catchAsync(async (req, res, next) => {
         todayRevenue: todayRevenue[0]?.total || 0,
         weeklyRevenue: weeklyRevenue[0]?.total || 0,
         monthlyRevenue: monthlyRevenue[0]?.total || 0,
-        yearlyRevenue: yearlyRevenue[0]?.total || 0,
+        yearlyRevenue: currentYearRevenue,
         avgOrderValue: totalOrders > 0 ? (totalRevenue[0]?.total || 0) / totalOrders : 0
+      },
+      growth: {
+        revenueGrowthRate: Math.round(revenueGrowthRate * 100) / 100, // Round to 2 decimal places
+        ordersGrowthRate: Math.round(ordersGrowthRate * 100) / 100,
+        previousYearRevenue,
+        previousYearOrders: lastYearOrders,
+        currentYearRevenue,
+        currentYearOrders: yearlyOrders
       },
       statusBreakdown: statusCounts.reduce((acc, item) => {
         acc[item._id] = item.count
