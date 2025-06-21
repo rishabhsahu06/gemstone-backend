@@ -28,7 +28,7 @@ router.post("/verify-payment", verifyRazorpayPayment)
 router.get("/", getUserOrders)
 router.get("/:id", getOrderById)
 
-// Order management
+
 router.put("/:id/cancel", cancelOrder)
 
 // Admin only routes
