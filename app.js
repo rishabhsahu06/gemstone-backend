@@ -57,6 +57,7 @@ const corsOptions = {
       'http://localhost:8000',  // API server
       'http://127.0.0.1:8000',  // API server
       'https://sunitagemstones.netlify.app',  // API server
+      'https://gemston-admin.vercel.app',
       'https://gemston-admin.vercel.app/',
       'https://sunitagemstones.com',  // Production server
       'https://sunitagemstones.com/api',  // API server
