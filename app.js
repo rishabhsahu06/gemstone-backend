@@ -56,10 +56,10 @@ const corsOptions = {
       'http://127.0.0.1:3001',  // Alternative localhost
       'http://localhost:8000',  // API server
       'http://127.0.0.1:8000',  // API server
-      'https://sunitagemstones.netlify.app',  // Frontend
-      'https://gemston-admin.vercel.app',     // Admin panel (FIXED: removed trailing slash)
-      'https://sunitagemstones.com',          // Production server
-      'https://sunitagemstones.com/api',      // API server
+      'https://sunitagemstones.netlify.app',  // API server
+      'https://gemston-admin.vercel.app',
+      'https://sunitagemstones.com',  // Production server
+      'https://sunitagemstones.com/api',  // API server
       // Add your production frontend URLs here when you deploy
       // 'https://yourdomain.com',
       // 'https://www.yourdomain.com'
@@ -68,7 +68,6 @@ const corsOptions = {
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      console.log('CORS blocked origin:', origin); // Add logging for debugging
       callback(new Error('Not allowed by CORS'));
     }
   },
