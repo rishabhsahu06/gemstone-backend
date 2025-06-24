@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, "Please provide a phone number"],
+      // required: [true, "Please provide a phone number"],
       match: [/^\+[1-9]\d{1,14}$/, "Please provide a valid phone number with country code"],
     },
     role: {
@@ -40,6 +40,15 @@ const userSchema = new mongoose.Schema(
       postalCode: String,
       country: String,
     },
+     isVerified: {
+    type: Boolean,
+    default: false
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true // This allows multiple null values
+  },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },

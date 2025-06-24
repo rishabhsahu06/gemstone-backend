@@ -7,7 +7,8 @@ import morgan from "morgan"
 import rateLimit from "express-rate-limit"
 import swaggerUi from "swagger-ui-express"
 import swaggerJsDoc from "swagger-jsdoc"
-
+import twilio from "twilio"
+import config from "./config/config.js"
 // Import routes
 import authRoutes from "./routes/auth.routes.js"
 import productRoutes from "./routes/product.routes.js"
@@ -104,6 +105,22 @@ const limiter = rateLimit({
 app.get("/", (req, res) => {
   res.status(200).json({ status: "ok", message: "Welcome to Gemstone E-Commerce API's" })
 })
+
+// app.post("/send-whatsapp-message", async (req, res) => {
+
+
+// const client = twilio(config.whatsapp.accountSid, config.whatsapp.authToken)
+
+// const response = await client.messages.create({
+//     body: "heelo check",
+//     from: "whatsapp:+16813813124",
+//     to: "whatsapp:+919303191669",
+//   })
+//   res.status(200).json({ status: "ok", message: "Whatsapp message sent successfully", data: response })
+// })
+
+
+
 app.use("/api", limiter)
 
 // Routes

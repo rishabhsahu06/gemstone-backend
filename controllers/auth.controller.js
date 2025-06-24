@@ -3,7 +3,8 @@ import { AppError } from "../utils/appError.js"
 import { catchAsync } from "../utils/catchAsync.js"
 import validator from "validator"
 import rateLimit from "express-rate-limit"
-
+import bcrypt from "bcryptjs"
+import jwt from "jsonwebtoken"
 // Rate limiting for auth endpoints
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -89,6 +90,101 @@ const generateUserResponse = (user, token = null) => {
 
   return response
 }
+
+export const googleLogin = async (req, res) => {
+  try {
+    const { email, name, googleId } = req.body
+
+    // Validate required fields
+    if (!email || !name || !googleId) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, name, and Google ID are required"
+      })
+    }
+
+    // Check if user already exists
+    let user = await User.findOne({ email })
+
+    if (user) {
+      // User exists - update Google ID if not set
+      if (!user.googleId) {
+        user.googleId = googleId
+        await user.save()
+      }
+      
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_INS_IN || "30d" }
+      )
+
+      return res.status(200).json({
+        success: true,
+        message: "Login successful",
+        data: {
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            isVerified: user.isVerified
+          },
+          token
+        }
+      })
+    } else {
+      // User doesn't exist - create new user
+      const newUser = new User({
+        name,
+        email,
+        googleId,
+        isVerified: true, // Google users are automatically verified
+        role: "user", // Default role
+        // Don't set password for Google users
+      })
+
+      await newUser.save()
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { id: newUser._id },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
+      )
+
+      return res.status(201).json({
+        success: true,
+        message: "Account created and login successful",
+        data: {
+          user: {
+            id: newUser._id,
+            name: newUser.name,
+            email: newUser.email,
+            phone: newUser.phone,
+            role: newUser.role,
+            isVerified: newUser.isVerified
+          },
+          token
+        }
+      })
+    }
+  } catch (error) {
+    console.error("Google login error:", error)
+    return res.status(500).json({
+      success: false,
+      message: "Server error during Google login",
+      error: error.message
+    })
+  }
+}
+
+
+
+
+
 
 // @desc    Register user
 // @route   POST /api/auth/register
