@@ -1,5 +1,5 @@
 import express from "express"
-import { register, login, getMe, updateProfile, updatePassword, googleLogin, updatePhone } from "../controllers/auth.controller.js"
+import { register, login, getMe, updateProfile, updatePassword, googleLogin } from "../controllers/auth.controller.js"
 import { protect } from "../middleware/auth.middleware.js"
 import { sendRegistrationOTP,otpLimiter, verifyOTPAndRegister, resendOTP, sendLoginOTP, verifyLoginOTP } from "../controllers/otp.controller.js"
 import { getCheckoutAddress, updateCheckoutAddress, validateCheckoutAddress } from "../controllers/user.address.controller.js"
@@ -18,7 +18,6 @@ router.post("/google-login", googleLogin)
 router.post("/register", register)
 router.post("/login", login)
 router.get("/me", protect, getMe)
-router.post('/update-phone', protect, updatePhone) // Protected route
 router.put("/updateprofile", protect, updateProfile)
 router.put("/updatepassword", protect, updatePassword)
 
