@@ -371,6 +371,113 @@ export const getMe = catchAsync(async (req, res, next) => {
   }
 })
 
+// @desc    Update user phone number
+// @route   POST /api/auth/update-phone
+// @access  Private
+
+// @desc    Update user phone number
+// @route   POST /api/auth/update-phone
+// @access  Private
+export const updatePhone = catchAsync(async (req, res, next) => {
+  try {
+    const { phone } = req.body
+    const userId = req.user.id // This comes from the auth middleware
+
+    // Validate phone number
+    if (!phone) {
+      return next(new AppError("Phone number is required", 400))
+    }
+
+    // Define supported country codes and their validation patterns
+    const supportedCountries = [
+      { code: "+91", country: "India", pattern: /^\+91[6-9]\d{9}$/ },
+      { code: "+1", country: "USA", pattern: /^\+1\d{10}$/ },
+      { code: "+44", country: "UK", pattern: /^\+44\d{10}$/ },
+      { code: "+61", country: "Australia", pattern: /^\+61\d{9}$/ },
+      { code: "+971", country: "UAE", pattern: /^\+971[5]\d{8}$/ }
+    ]
+
+    // Find matching country code
+    const matchedCountry = supportedCountries.find(country => 
+      phone.startsWith(country.code)
+    )
+
+    if (!matchedCountry) {
+      return next(new AppError("Unsupported country code. Please use one of: +91, +1, +44, +61, +971", 400))
+    }
+
+    // Validate phone format based on country
+    if (!matchedCountry.pattern.test(phone)) {
+      return next(new AppError(`Please enter a valid phone number for ${matchedCountry.country}`, 400))
+    }
+
+    // Check if phone number is already in use by another user
+    const existingUser = await User.findOne({ 
+      phone: phone,
+      _id: { $ne: userId } // Exclude current user
+    })
+
+    if (existingUser) {
+      return next(new AppError("This phone number is already registered with another account", 409))
+    }
+
+    // Update user's phone number
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { phone: phone },
+      { 
+        new: true, 
+        runValidators: true,
+        select: '-password' // Exclude password from response
+      }
+    )
+
+    if (!user) {
+      return next(new AppError("User not found", 404))
+    }
+
+    // Log the update
+    console.log(`Phone number updated for user: ${user.email} (ID: ${user._id}) - Country: ${matchedCountry.country}`)
+
+    res.status(200).json({
+      success: true,
+      message: "Phone number updated successfully",
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          isVerified: user.isVerified
+        }
+      }
+    })
+
+  } catch (error) {
+    // Handle MongoDB validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message)
+      return next(new AppError(messages.join('. '), 400))
+    }
+
+    // Handle MongoDB duplicate key errors
+    if (error.code === 11000) {
+      return next(new AppError("This phone number is already registered", 409))
+    }
+
+    // Handle custom AppError
+    if (error instanceof AppError) {
+      return next(error)
+    }
+
+    // Log unexpected errors
+    console.error('Phone update error:', error)
+    return next(new AppError("Internal server error during phone update", 500))
+  }
+})
+
+
 // @desc    Update user profile
 // @route   PUT /api/auth/updateprofile
 // @access  Private
