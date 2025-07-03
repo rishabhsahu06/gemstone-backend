@@ -17,6 +17,7 @@ import orderRoutes from "./routes/order.routes.js"
 import enquiryRoutes from "./routes/enquiry.routes.js"
 import adminRoutes from "./routes/admin.routes.js"
 import uploadMediaRoutes from "./routes/uploadMedia.routes.js";
+import uploadVideo from "./routes/video.routes.js";
 import bookingCallRoutes from "./routes/booking-recom-call.js"
 // Import middleware
 import { errorHandler } from "./middleware/error.middleware.js"
@@ -132,6 +133,7 @@ app.use("/api/enquiries", enquiryRoutes)
 app.use("/api/admin", adminRoutes)
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs))
 app.use("/api/upload-media", uploadMediaRoutes);
+app.use("/api/video", uploadVideo);
 app.use("/api/booking-call", bookingCallRoutes);
 // Health check endpoint
 app.get("/health", (req, res) => {
