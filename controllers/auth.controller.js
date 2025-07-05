@@ -283,7 +283,7 @@ export const login = catchAsync(async (req, res, next) => {
       return next(new AppError("Invalid email or password", 401))
     }
 
-    // Check if account is active/not suspended
+    // Check if account is active/not suspended //
     if (user.status === 'suspended') {
       return next(new AppError("Account has been suspended. Please contact support", 403))
     }
