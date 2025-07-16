@@ -62,12 +62,10 @@ const corsOptions = {
       'https://gemston-admin.vercel.app',
       'https://sunitagemstones.com',  // Production server
       'https://sunitagemstones.com/api',
-           'www.sunitagemstones.com',
-           'sunitagemstones.com',
-           'https://main.d1w5mi9gl1l8g5.amplifyapp.com/'
-      // Add your production frontend URLs here when you deploy
-      // 'https://yourdomain.com',
-      // 'https://www.yourdomain.com'
+      'https://www.sunitagemstones.com',
+      'www.sunitagemstones.com',
+      'sunitagemstones.com',
+      'https://main.d1w5mi9gl1l8g5.amplifyapp.com/'
     ];
     
     if (allowedOrigins.indexOf(origin) !== -1) {
