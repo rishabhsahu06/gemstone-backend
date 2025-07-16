@@ -61,7 +61,10 @@ const corsOptions = {
       'https://sunitagemstones.netlify.app',  // API server
       'https://gemston-admin.vercel.app',
       'https://sunitagemstones.com',  // Production server
-      'https://sunitagemstones.com/api',  // API server
+      'https://sunitagemstones.com/api',
+           'www.sunitagemstones.com',
+           'sunitagemstones.com',
+           'https://main.d1w5mi9gl1l8g5.amplifyapp.com/'
       // Add your production frontend URLs here when you deploy
       // 'https://yourdomain.com',
       // 'https://www.yourdomain.com'
