@@ -41,4 +41,6 @@ const uploadToCloudinary = (buffer, fileInfo = {}) => {
   });
 };
 
+// Export both the upload function and cloudinary instance
 export default uploadToCloudinary;
+export { cloudinary };
