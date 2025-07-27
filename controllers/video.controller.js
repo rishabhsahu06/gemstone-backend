@@ -1,7 +1,7 @@
 import Video from '../models/video.model.js';
 import { v2 as cloudinary } from 'cloudinary';
 
-// Helper function to extract public_id from Cloudinary URL
+
 const extractPublicIdFromUrl = (url) => {
   try {
     // Cloudinary URLs typically look like:
