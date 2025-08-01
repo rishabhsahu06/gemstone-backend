@@ -54,8 +54,6 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:3000',  
       'http://localhost:3001',
-      // 'http://127.0.0.1:3000',  // Alternative localhost
-      // 'http://127.0.0.1:3001',  // Alternative localhost
       'http://localhost:8000',  // API server
       'http://127.0.0.1:8000',  // API server
       'https://sunitagemstones.netlify.app',  // API server

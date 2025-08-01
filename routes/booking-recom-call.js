@@ -491,7 +491,7 @@ router.put("/:id", protect, authorize("admin"), async (req, res) => {
     const { status, scheduledDate, notes } = req.body;
 
     // Validate status if provided
-    if (status && !["Pending", "Scheduled", "Completed", "Cancelled"].includes(status)) {
+    if (status && !["Pending", "Scheduled", "Completed", "Cancelled","Bad","Good","Future"].includes(status)) {
       return res.status(400).json({
         success: false,
         message: "Invalid status value"
@@ -502,6 +502,7 @@ router.put("/:id", protect, authorize("admin"), async (req, res) => {
     if (status) updateData.status = status;
     if (scheduledDate) updateData.scheduledDate = scheduledDate;
     if (notes) updateData.notes = notes;
+    
 
     const updatedBooking = await BookingCall.findByIdAndUpdate(
       id,
@@ -635,6 +636,9 @@ router.get("/stats/summary", protect, authorize("admin"), async (req, res) => {
     const scheduledBookings = await BookingCall.countDocuments({ status: "Scheduled" });
     const completedBookings = await BookingCall.countDocuments({ status: "Completed" });
     const cancelledBookings = await BookingCall.countDocuments({ status: "Cancelled" });
+    const badBookings = await BookingCall.countDocuments({ status: "Bad" });
+    const goodBookings = await BookingCall.countDocuments({ status: "Good" });
+    const futureBookings = await BookingCall.countDocuments({ status: "Future" });
 
     // Get purpose breakdown
     const purposeBreakdown = await BookingCall.aggregate([
@@ -660,6 +664,9 @@ router.get("/stats/summary", protect, authorize("admin"), async (req, res) => {
         scheduledBookings,
         completedBookings,
         cancelledBookings,
+        badBookings,
+        goodBookings,
+        futureBookings,
         purposeBreakdown: purposeStats
       }
     });
