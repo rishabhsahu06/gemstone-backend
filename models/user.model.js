@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
+      // Required for password/Google users; OTP phone login uses a synthetic email
       required: [true, "Please provide an email"],
       unique: true,
       match: [/^([\w-.]+@([\w-]+\.)+[\w-]{2,4})?$/, "Please provide a valid email"],
@@ -26,6 +27,8 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       // required: [true, "Please provide a phone number"],
+      unique: true,
+      sparse: true,
       match: [/^\+[1-9]\d{1,14}$/, "Please provide a valid phone number with country code"],
     },
     role: {
@@ -40,15 +43,22 @@ const userSchema = new mongoose.Schema(
       postalCode: String,
       country: String,
     },
-     isVerified: {
-    type: Boolean,
-    default: false
-  },
-  googleId: {
-    type: String,
-    unique: true,
-    sparse: true // This allows multiple null values
-  },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    isPhoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+    lastLoginAt: {
+      type: Date,
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // This allows multiple null values
+    },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
   },
@@ -57,11 +67,12 @@ const userSchema = new mongoose.Schema(
 
 // Encrypt password using bcrypt
 userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) {
-    next()
+  if (!this.isModified("password") || !this.password) {
+    return next()
   }
   const salt = await bcrypt.genSalt(10)
   this.password = await bcrypt.hash(this.password, salt)
+  next()
 })
 
 // Sign JWT and return

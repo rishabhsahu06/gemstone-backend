@@ -685,3 +685,144 @@ export const cleanupExpiredTempData = () => {
 
 // Run cleanup every 15 minutes
 setInterval(cleanupExpiredTempData, 15 * 60 * 1000);
+
+/**
+ * Normalize phone to E.164 (+country...). Prefer India (+91) for 10-digit locals.
+ */
+const normalizeToE164 = (phone, mobile) => {
+  const raw = String(phone || mobile || "").trim()
+  if (!raw) return null
+
+  let digits = raw.replace(/\D/g, "")
+  if (!digits) return null
+
+  // 10-digit Indian mobile
+  if (digits.length === 10 && /^[6-9]/.test(digits)) {
+    digits = `91${digits}`
+  }
+
+  // Already has country code without +
+  if (digits.length >= 11 && digits.length <= 15) {
+    return `+${digits}`
+  }
+
+  return null
+}
+
+/**
+ * @desc    Find or create user after MSG91 OTP verification; return app JWT
+ * @route   POST /api/auth/mobile-user
+ * @route   POST /api/auth/otp-login
+ * @access  Public
+ *
+ * Body: { phone: "+9198...", mobile: "9198..." }
+ * Frontend has already verified OTP via MSG91 Widget.
+ */
+export const mobileUserLogin = catchAsync(async (req, res) => {
+  try {
+    const { phone, mobile } = req.body
+    const e164 = normalizeToE164(phone, mobile)
+
+    if (!e164) {
+      return res.status(400).json(formatResponse(
+        false,
+        "Valid phone number with country code is required",
+        null,
+        "MISSING_REQUIRED_FIELDS"
+      ))
+    }
+
+    const digits = e164.replace(/\D/g, "")
+    const phoneVariants = [e164, digits, `+${digits}`]
+
+    let user = await User.findOne({ phone: { $in: phoneVariants } })
+
+    if (!user) {
+      const last4 = digits.slice(-4)
+      const syntheticEmail = `otp_${digits}@otp.sunitagemstones.com`
+
+      // If synthetic email collides, reuse that user and attach phone
+      const existingByEmail = await User.findOne({ email: syntheticEmail })
+      if (existingByEmail) {
+        existingByEmail.phone = e164
+        existingByEmail.isVerified = true
+        if (typeof existingByEmail.isPhoneVerified !== "undefined") {
+          existingByEmail.isPhoneVerified = true
+        }
+        existingByEmail.lastLoginAt = new Date()
+        await existingByEmail.save({ validateBeforeSave: false })
+        user = existingByEmail
+      } else {
+        user = await User.create({
+          name: `User ${last4}`,
+          email: syntheticEmail,
+          phone: e164,
+          role: "user",
+          isVerified: true,
+          // password omitted — OTP-only account
+        })
+      }
+    } else {
+      user.lastLoginAt = new Date()
+      if (!user.phone) user.phone = e164
+      user.isVerified = true
+      await user.save({ validateBeforeSave: false })
+    }
+
+    if (user.status === "suspended") {
+      return res.status(403).json(formatResponse(
+        false,
+        "Account has been suspended",
+        null,
+        "ACCOUNT_SUSPENDED"
+      ))
+    }
+
+    const token = user.getSignedJwtToken()
+    if (!token) {
+      return res.status(500).json(formatResponse(
+        false,
+        "Failed to generate authentication token",
+        null,
+        "TOKEN_GENERATION_FAILED"
+      ))
+    }
+
+    const userResponse = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    }
+
+    return res.status(200).json(formatResponse(
+      true,
+      "Login successful",
+      {
+        user: userResponse,
+        token,
+        expiresIn: "30d",
+      }
+    ))
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json(formatResponse(
+        false,
+        "User already exists with this phone or email",
+        null,
+        "DUPLICATE_USER"
+      ))
+    }
+
+    console.error("mobile-user login error:", error)
+    return res.status(500).json(formatResponse(
+      false,
+      error.message || "Internal server error",
+      null,
+      "INTERNAL_SERVER_ERROR"
+    ))
+  }
+})
