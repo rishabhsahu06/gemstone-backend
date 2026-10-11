@@ -124,7 +124,36 @@ app.get("/", (req, res) => {
 
 app.use("/api", limiter)
 
-// Routes
+// Cached Mongo connection for Vercel serverless
+const isServerless = Boolean(process.env.VERCEL)
+let mongoPromise = null
+
+async function connectDB() {
+  if (mongoose.connection.readyState === 1) return
+  if (!process.env.MONGODB_URI) {
+    throw new Error("MONGODB_URI is not set")
+  }
+  if (!mongoPromise) {
+    mongoPromise = mongoose.connect(process.env.MONGODB_URI)
+  }
+  await mongoPromise
+}
+
+async function ensureDb(req, res, next) {
+  try {
+    await connectDB()
+    next()
+  } catch (err) {
+    console.error("MongoDB connection error:", err)
+    res.status(503).json({
+      success: false,
+      message: "Database unavailable. Check MONGODB_URI / Atlas Network Access.",
+    })
+  }
+}
+
+// Routes (wait for DB before handling API traffic)
+app.use("/api", ensureDb)
 app.use("/api/auth", authRoutes)
 app.use("/api/products", productRoutes)
 app.use("/api/cart", cartRoutes)
@@ -143,21 +172,21 @@ app.get("/health", (req, res) => {
 // Error handling middleware
 app.use(errorHandler)
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-// mongoose.connect("mongodb+srv://sahushankar8202:Ans%40123456@cluster0.wzb9kx2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0") //this is gemstone db
-// mongoose.connect("mongodb+srv://shankar_user:Ans%40123456@cluster0.0o8rt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0") //this is e-commerce
+connectDB()
   .then(() => {
     console.log("Connected to MongoDB")
-    // Start server
-    const PORT = process.env.PORT || 8000
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`)
-    })
+    if (!isServerless) {
+      const PORT = process.env.PORT || 8000
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`)
+      })
+    }
   })
   .catch((err) => {
     console.error("MongoDB connection error:", err)
-    process.exit(1)
+    if (!isServerless) {
+      process.exit(1)
+    }
   })
 
 export default app
