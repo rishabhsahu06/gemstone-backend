@@ -5,11 +5,27 @@ import { protect } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
+const handleMulter = (multerMiddleware) => (req, res, next) => {
+  multerMiddleware(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        success: false,
+        message: "File too large. Please upload an image under 20MB.",
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      message: err.message || "Invalid file upload.",
+    });
+  });
+};
+
 // Single file upload route
 router.post(
   "/", 
   protect, 
-  upload.single("media"), 
+  handleMulter(upload.single("media")), 
   uploadMedia
 );
 

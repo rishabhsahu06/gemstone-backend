@@ -55,13 +55,14 @@ export const getProducts = catchAsync(async (req, res, next) => {
     fields,
     page = 1,
     limit = 10,
+    productType,
     ...filters
   } = req.query;
 
   // Generate cache keys
-  const queryForCache = { search, minPrice, maxPrice, isAvailable, sort, fields, page, limit, ...filters };
+  const queryForCache = { search, minPrice, maxPrice, isAvailable, sort, fields, page, limit, productType, ...filters };
   const cacheKey = generateCacheKey.allProducts(queryForCache);
-  const countCacheKey = generateCacheKey.productCount(filters);
+  const countCacheKey = generateCacheKey.productCount({ productType, ...filters });
 
   // Try to get from cache first
   const cachedResult = cache.get(cacheKey);
@@ -74,7 +75,19 @@ export const getProducts = catchAsync(async (req, res, next) => {
   // Advanced filtering (e.g., price[gte]=10)
   let queryStr = JSON.stringify(queryObj);
   queryStr = queryStr.replace(/\b(gt|gte|lt|lte)\b/g, (match) => `$${match}`);
-  let mongoQuery = Product.find(JSON.parse(queryStr));
+  const parsedFilters = JSON.parse(queryStr);
+
+  if (productType === "jewellery") {
+    parsedFilters.productType = "jewellery";
+  } else if (productType === "gemstone") {
+    parsedFilters.$or = [
+      { productType: "gemstone" },
+      { productType: { $exists: false } },
+      { productType: null },
+    ];
+  }
+
+  let mongoQuery = Product.find(parsedFilters);
 
   // Search
   if (search) {
@@ -119,7 +132,7 @@ export const getProducts = catchAsync(async (req, res, next) => {
   // Execute queries
   const [products, total] = await Promise.all([
     mongoQuery,
-    cache.get(countCacheKey) || Product.countDocuments(JSON.parse(queryStr))
+    cache.get(countCacheKey) || Product.countDocuments(parsedFilters)
   ]);
 
   // Cache the count if not already cached
@@ -190,6 +203,12 @@ export const getPrimaryCategories = catchAsync(async (req, res, next) => {
   // Get products with distinct primary categories and their images
   const products = await Product.aggregate([
     {
+      $match: {
+        primaryCategory: { $ne: "jewellery" },
+        productType: { $ne: "jewellery" },
+      },
+    },
+    {
       $group: {
         _id: '$primaryCategory',
         primaryCategoryImage: { $first: '$primaryCategoryImage' }
@@ -231,6 +250,13 @@ export const getPrimaryCategories = catchAsync(async (req, res, next) => {
 // @route   POST /api/products
 // @access  Private/Admin
 export const createProduct = catchAsync(async (req, res, next) => {
+  const isJewellery = req.body.productType === "jewellery";
+
+  if (isJewellery) {
+    req.body.primaryCategory = req.body.primaryCategory || "jewellery";
+    req.body.secondaryCategory = req.body.secondaryCategory || "none";
+  }
+
   const {
     name,
     description,
@@ -238,6 +264,8 @@ export const createProduct = catchAsync(async (req, res, next) => {
     primaryCategory,
     images,
     stock,
+    jewelleryType,
+    metal,
   } = req.body;
 
   // Validate required fields
@@ -256,6 +284,13 @@ export const createProduct = catchAsync(async (req, res, next) => {
     });
   }
 
+  if (isJewellery && (!jewelleryType || !metal)) {
+    return res.status(400).json({
+      success: false,
+      message: "Please provide jewelleryType and metal for jewellery products.",
+    });
+  }
+
   // Generate slug from name
   const slug = name.toLowerCase().replace(/[^\w ]+/g, "").replace(/ +/g, "-");
 
@@ -263,6 +298,7 @@ export const createProduct = catchAsync(async (req, res, next) => {
   const product = await Product.create({
     ...req.body,
     slug,
+    productType: isJewellery ? "jewellery" : req.body.productType || "gemstone",
   });
 
   // Invalidate relevant caches

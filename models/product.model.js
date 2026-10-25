@@ -17,6 +17,12 @@ const productSchema = new mongoose.Schema(
       required: [true, "Please provide a product description"],
       maxlength: [2000, "Description cannot be more than 2000 characters"],
     },
+    productType: {
+      type: String,
+      enum: ["gemstone", "jewellery"],
+      default: "gemstone",
+      index: true,
+    },
     primaryCategory: {
       type: String,
       required: [true, "Please provide a primary category"],
@@ -52,8 +58,30 @@ enum:
   "kyanite",
   "sodalite",
   "other-gemstones",
+  "jewellery",
 ],
 
+    },
+    metal: {
+      type: String,
+      enum: ["gold", "silver", "platinum", "rose-gold"],
+    },
+    jewelleryType: {
+      type: String,
+      enum: ["rings", "necklaces", "bracelets", "earrings", "anklets", "chokers", "pendants"],
+    },
+    jewelleryTag: {
+      type: String,
+      enum: ["all", "new", "popular", "sale"],
+      default: "all",
+    },
+    goldPurity: {
+      type: String,
+      default: "",
+    },
+    size: {
+      type: String,
+      default: "",
     },
     primaryCategoryImage: {
   type: String,
@@ -241,6 +269,7 @@ productSchema.pre("save", function (next) {
 
 // Add index for search functionality
 productSchema.index({ name: "text", description: "text" });
+productSchema.index({ productType: 1, jewelleryType: 1, metal: 1 });
 
 const Product = mongoose.model("Product", productSchema);
 

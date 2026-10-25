@@ -140,6 +140,9 @@ async function connectDB() {
 }
 
 async function ensureDb(req, res, next) {
+  if (req.originalUrl?.includes("/upload-media")) {
+    return next()
+  }
   try {
     await connectDB()
     next()
