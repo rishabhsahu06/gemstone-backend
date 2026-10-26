@@ -134,7 +134,14 @@ async function connectDB() {
     throw new Error("MONGODB_URI is not set")
   }
   if (!mongoPromise) {
-    mongoPromise = mongoose.connect(process.env.MONGODB_URI)
+    mongoPromise = mongoose
+      .connect(process.env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 8000,
+        family: 4,
+      })
+      .finally(() => {
+        if (mongoose.connection.readyState !== 1) mongoPromise = null
+      })
   }
   await mongoPromise
 }

@@ -10,10 +10,20 @@ import config from "../config/config.js"
 import { sendWhatsAppMessage, validateWhatsAppConfig } from "../services/watsapp.service.js"
 import BookingCall from "../models/bookingCall.model.js"
 
-const razorpay = new Razorpay({
-  key_id: config.razorpay.keyId,
-  key_secret: config.razorpay.keySecret,
-})
+let razorpayClient = null
+
+function getRazorpay() {
+  if (!config.razorpay.keyId || !config.razorpay.keySecret) {
+    throw new AppError("Razorpay is not configured", 500)
+  }
+  if (!razorpayClient) {
+    razorpayClient = new Razorpay({
+      key_id: config.razorpay.keyId,
+      key_secret: config.razorpay.keySecret,
+    })
+  }
+  return razorpayClient
+}
 
 // @desc    Create Razorpay order
 // @route   POST /api/orders/create-order
@@ -57,7 +67,7 @@ export const createRazorpayOrder = catchAsync(async (req, res, next) => {
   const amount = Math.round(cart.totalAmount * 100)
 
   // Create Razorpay order
-  const razorpayOrder = await razorpay.orders.create({
+  const razorpayOrder = await getRazorpay().orders.create({
     amount: amount,
     currency: "INR",
     receipt: `order_${Date.now()}`,
@@ -99,8 +109,8 @@ export const verifyRazorpayPayment = catchAsync(async (req, res, next) => {
 
   try {
     // Get order details from Razorpay
-    const razorpayOrder = await razorpay.orders.fetch(razorpay_order_id)
-    const payment = await razorpay.payments.fetch(razorpay_payment_id)
+    const razorpayOrder = await getRazorpay().orders.fetch(razorpay_order_id)
+    const payment = await getRazorpay().payments.fetch(razorpay_payment_id)
 
     console.log('Payment verified successfully:', payment.id)
 
@@ -143,7 +153,7 @@ export const razorpayWebhook = catchAsync(async (req, res, next) => {
     const orderId = payment.order_id
 
     // Get order details
-    const razorpayOrder = await razorpay.orders.fetch(orderId)
+    const razorpayOrder = await getRazorpay().orders.fetch(orderId)
     
     console.log("Payment captured:", payment.id)
   }

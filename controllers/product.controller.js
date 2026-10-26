@@ -255,6 +255,9 @@ export const createProduct = catchAsync(async (req, res, next) => {
   if (isJewellery) {
     req.body.primaryCategory = req.body.primaryCategory || "jewellery";
     req.body.secondaryCategory = req.body.secondaryCategory || "none";
+    if (req.body.isAvailable === undefined || req.body.isAvailable === null) {
+      req.body.isAvailable = true;
+    }
   }
 
   const {
@@ -265,7 +268,6 @@ export const createProduct = catchAsync(async (req, res, next) => {
     images,
     stock,
     jewelleryType,
-    metal,
   } = req.body;
 
   // Validate required fields
@@ -284,10 +286,10 @@ export const createProduct = catchAsync(async (req, res, next) => {
     });
   }
 
-  if (isJewellery && (!jewelleryType || !metal)) {
+  if (isJewellery && !jewelleryType) {
     return res.status(400).json({
       success: false,
-      message: "Please provide jewelleryType and metal for jewellery products.",
+      message: "Please provide jewelleryType for jewellery products.",
     });
   }
 
